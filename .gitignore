@@ -1,0 +1,5 @@
+node_modules/
+dist/
+lambda.zip
+.env
+/tmp/

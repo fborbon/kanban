@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drive — Forward Forecasting</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f0f1a;
+  --header: #16162a;
+  --card: #1e1e32;
+  --card-hover: #252540;
+  --border: rgba(255,255,255,0.08);
+  --accent: #6c63ff;
+  --accent2: #8b5cf6;
+  --text: #e8e8f0;
+  --muted: #888;
+  --radius: 10px;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ── Header ── */
+.header {
+  background: var(--header);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.header-title { font-size: 17px; font-weight: 700; flex: 1; }
+.header-badge {
+  font-size: 11px;
+  background: var(--accent);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+.btn {
+  padding: 7px 16px;
+  border-radius: 7px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.85; }
+.btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn-primary { background: var(--accent); color: #fff; }
+
+/* ── Login ── */
+.login-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+.login-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px;
+  width: 100%;
+  max-width: 360px;
+}
+.login-box h2 { font-size: 22px; margin-bottom: 6px; }
+.login-box p  { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.field label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.field input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.field input:focus { border-color: var(--accent); }
+.login-error { color: #f87171; font-size: 13px; margin-bottom: 12px; }
+.login-submit { width: 100%; margin-top: 8px; padding: 12px; font-size: 14px; }
+
+/* ── Toolbar ── */
+.toolbar {
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.search-box {
+  flex: 1;
+  min-width: 200px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 14px;
+  outline: none;
+}
+.search-box:focus { border-color: var(--accent); }
+.filter-group { display: flex; gap: 6px; }
+.filter-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.sort-select {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  outline: none;
+  cursor: pointer;
+}
+.file-count { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+/* ── Grid ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+  padding: 0 24px 40px;
+}
+.file-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  position: relative;
+}
+.file-card:hover { background: var(--card-hover); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+.file-thumb {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  display: block;
+  background: var(--bg);
+}
+.file-icon-box {
+  width: 100%;
+  aspect-ratio: 4/3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  font-size: 48px;
+}
+.file-info {
+  padding: 10px 12px;
+}
+.file-name {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+.file-meta { font-size: 11px; color: var(--muted); }
+
+.file-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: none;
+  gap: 4px;
+}
+.file-card:hover .file-actions { display: flex; }
+.action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  transition: opacity 0.1s;
+}
+.action-btn:hover { opacity: 0.8; }
+.action-download { background: rgba(0,0,0,0.7); color: #fff; }
+.action-delete { background: rgba(220,38,38,0.85); color: #fff; }
+
+/* ── Empty state ── */
+.empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--muted);
+}
+.empty-icon { font-size: 48px; margin-bottom: 16px; }
+.empty p { font-size: 14px; }
+
+/* ── Loading ── */
+.loading {
+  text-align: center;
+  padding: 80px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ── Viewer overlay ── */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+.overlay-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.overlay-title { flex: 1; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.overlay-body { flex: 1; overflow: hidden; }
+.overlay-body iframe { width: 100%; height: 100%; border: none; min-height: 500px; }
+.overlay-body img { width: 100%; height: 100%; object-fit: contain; max-height: 70vh; }
+.overlay-body pre {
+  padding: 20px;
+  font-size: 13px;
+  color: var(--text);
+  overflow: auto;
+  max-height: 500px;
+  white-space: pre-wrap;
+  font-family: 'Courier New', monospace;
+}
+.overlay-body .csv-wrap { overflow: auto; max-height: 500px; }
+.overlay-body table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.overlay-body th { background: var(--bg); padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+.overlay-body td { padding: 7px 12px; border-bottom: 1px solid var(--border); }
+.overlay-body tr:hover td { background: var(--card-hover); }
+
+/* ── Delete confirm ── */
+.confirm-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.confirm-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+  max-width: 340px;
+  text-align: center;
+}
+.confirm-box h3 { margin-bottom: 10px; }
+.confirm-box p { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+.confirm-btns { display: flex; gap: 10px; justify-content: center; }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script>
+const API = '/api';
+const TOKEN_KEY = 'drive-token';
+
+function getToken() { return localStorage.getItem(TOKEN_KEY); }
+function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
+function clearToken() { localStorage.removeItem(TOKEN_KEY); }
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(API + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}`, ...(opts.headers ?? {}) },
+  });
+  if (res.status === 401) { clearToken(); renderApp(); throw new Error('UNAUTHORIZED'); }
+  return res;
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function fileIcon(type) {
+  return { image: '🖼️', pdf: '📄', txt: '📝', csv: '📊', file: '📁' }[type] ?? '📁';
+}
+
+// ── State ──────────────────────────────────────────────────────────────────
+let allFiles = [];
+let filter = 'all';
+let search = '';
+let sort = 'newest';
+let viewer = null;
+let deleteTarget = null;
+
+function filteredFiles() {
+  let list = allFiles;
+  if (filter !== 'all') list = list.filter(f => f.type === filter || (filter === 'file' && !['image','pdf','txt','csv'].includes(f.type)));
+  if (search) {
+    const q = search.toLowerCase();
+    list = list.filter(f => f.name.toLowerCase().includes(q));
+  }
+  if (sort === 'newest') list = [...list].sort((a,b) => new Date(b.lastModified) - new Date(a.lastModified));
+  else if (sort === 'oldest') list = [...list].sort((a,b) => new Date(a.lastModified) - new Date(b.lastModified));
+  else if (sort === 'name') list = [...list].sort((a,b) => a.name.localeCompare(b.name));
+  else if (sort === 'size') list = [...list].sort((a,b) => b.size - a.size);
+  return list;
+}
+
+// ── Login ──────────────────────────────────────────────────────────────────
+function renderLogin(error = '') {
+  document.getElementById('root').innerHTML = `
+    <div class="login-wrap">
+      <div class="login-box">
+        <h2>🗂️ Drive</h2>
+        <p>Sign in to access your uploaded files.</p>
+        ${error ? `<div class="login-error">${error}</div>` : ''}
+        <div class="field"><label>Username</label><input id="uname" type="text" autocomplete="username"></div>
+        <div class="field"><label>Password</label><input id="pwd" type="password" autocomplete="current-password"></div>
+        <button class="btn btn-primary login-submit" onclick="doLogin()">Sign In</button>
+      </div>
+    </div>`;
+  document.getElementById('pwd').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('uname').focus();
+}
+
+async function doLogin() {
+  const u = document.getElementById('uname').value.trim();
+  const p = document.getElementById('pwd').value;
+  try {
+    const res = await fetch(API + '/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.token) { renderLogin(data.error ?? 'Invalid credentials'); return; }
+    setToken(data.token);
+    renderApp();
+  } catch {
+    renderLogin('Network error — please try again.');
+  }
+}
+
+// ── Main app ───────────────────────────────────────────────────────────────
+async function renderApp() {
+  if (!getToken()) { renderLogin(); return; }
+
+  document.getElementById('root').innerHTML = `
+    <div class="header">
+      <span style="font-size:22px">🗂️</span>
+      <span class="header-title">Drive</span>
+      <span class="header-badge" id="badge">…</span>
+      <button class="btn btn-ghost" onclick="doLogout()">🚪 Sign out</button>
+    </div>
+    <div class="toolbar">
+      <input class="search-box" type="search" placeholder="Search files…" id="searchInput" oninput="onSearch(this.value)">
+      <div class="filter-group">
+        <button class="filter-btn active" data-f="all" onclick="setFilter('all')">All</button>
+        <button class="filter-btn" data-f="image" onclick="setFilter('image')">🖼️ Images</button>
+        <button class="filter-btn" data-f="pdf" onclick="setFilter('pdf')">📄 PDF</button>
+        <button class="filter-btn" data-f="txt" onclick="setFilter('txt')">📝 TXT</button>
+        <button class="filter-btn" data-f="csv" onclick="setFilter('csv')">📊 CSV</button>
+      </div>
+      <select class="sort-select" onchange="setSort(this.value)">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="name">Name A–Z</option>
+        <option value="size">Largest first</option>
+      </select>
+    </div>
+    <div class="grid" id="grid"><div class="loading">Loading files…</div></div>
+    <div id="viewer-slot"></div>
+    <div id="confirm-slot"></div>`;
+
+  try {
+    const res = await apiFetch('/drive');
+    allFiles = await res.json();
+    renderGrid();
+  } catch (e) {
+    if (e.message !== 'UNAUTHORIZED') {
+      document.getElementById('grid').innerHTML = '<div class="loading">Failed to load files.</div>';
+    }
+  }
+}
+
+function renderGrid() {
+  const files = filteredFiles();
+  document.getElementById('badge').textContent = allFiles.length + ' file' + (allFiles.length !== 1 ? 's' : '');
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.f === filter));
+
+  if (!files.length) {
+    document.getElementById('grid').innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">${search || filter !== 'all' ? '🔍' : '📭'}</div>
+        <p>${search || filter !== 'all' ? 'No files match your filter.' : 'No uploads yet. Attach files from your Scrum board tasks.'}</p>
+      </div>`;
+    return;
+  }
+
+  document.getElementById('grid').innerHTML = files.map(f => `
+    <div class="file-card" onclick="openFile('${f.key}')">
+      ${f.type === 'image'
+        ? `<img class="file-thumb" src="${f.url}" alt="${f.name}" loading="lazy">`
+        : `<div class="file-icon-box">${fileIcon(f.type)}</div>`}
+      <div class="file-info">
+        <div class="file-name" title="${f.name}">${f.name}</div>
+        <div class="file-meta">${formatSize(f.size)} · ${formatDate(f.lastModified)}</div>
+      </div>
+      <div class="file-actions">
+        <a class="action-btn action-download" href="${f.url}" download="${f.name}" onclick="event.stopPropagation()" title="Download">⬇️</a>
+        <button class="action-btn action-delete" onclick="event.stopPropagation(); confirmDelete('${f.key}', '${f.name.replace(/'/g,"\\'")}')">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+
+function onSearch(v) { search = v; renderGrid(); }
+function setFilter(f) { filter = f; renderGrid(); }
+function setSort(s) { sort = s; renderGrid(); }
+
+// ── File viewer ────────────────────────────────────────────────────────────
+function openFile(key) {
+  const f = allFiles.find(x => x.key === key);
+  if (!f) return;
+  viewer = f;
+  renderViewer();
+}
+
+function renderViewer() {
+  const f = viewer;
+  if (!f) { document.getElementById('viewer-slot').innerHTML = ''; return; }
+
+  let body = '';
+  if (f.type === 'image') {
+    body = `<img src="${f.url}" alt="${f.name}">`;
+  } else if (f.type === 'pdf') {
+    body = `<iframe src="${f.url}" title="${f.name}"></iframe>`;
+  } else if (f.type === 'txt') {
+    body = `<div id="txt-body"><pre>Loading…</pre></div>`;
+  } else if (f.type === 'csv') {
+    body = `<div id="csv-body" class="csv-wrap"><p style="padding:20px;color:var(--muted)">Loading…</p></div>`;
+  }
+
+  document.getElementById('viewer-slot').innerHTML = `
+    <div class="overlay" onclick="closeViewer()">
+      <div class="overlay-box" onclick="event.stopPropagation()">
+        <div class="overlay-header">
+          <span>${fileIcon(f.type)}</span>
+          <span class="overlay-title" title="${f.name}">${f.name}</span>
+          <span style="font-size:12px;color:var(--muted)">${formatSize(f.size)}</span>
+          <a class="btn btn-ghost" style="padding:5px 12px;font-size:12px" href="${f.url}" download="${f.name}">⬇️ Download</a>
+          <button class="btn btn-ghost" style="padding:5px 10px;font-size:13px" onclick="closeViewer()">✕</button>
+        </div>
+        <div class="overlay-body">${body}</div>
+      </div>
+    </div>`;
+
+  if (f.type === 'txt') {
+    fetch(f.url).then(r => r.text()).then(t => {
+      const el = document.getElementById('txt-body');
+      if (el) el.innerHTML = `<pre>${t.replace(/</g,'&lt;')}</pre>`;
+    });
+  } else if (f.type === 'csv') {
+    fetch(f.url).then(r => r.text()).then(t => {
+      const el = document.getElementById('csv-body');
+      if (!el) return;
+      const rows = t.trim().split('\n').map(r => r.split(',').map(c => c.replace(/^"|"$/g,'').trim()));
+      if (!rows.length) return;
+      const [head, ...body] = rows;
+      el.innerHTML = `<table>
+        <thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+        <tbody>${body.map(r => `<tr>${head.map((_,i) => `<td>${r[i]??''}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>`;
+    });
+  }
+}
+
+function closeViewer() { viewer = null; document.getElementById('viewer-slot').innerHTML = ''; }
+
+// ── Delete confirm ─────────────────────────────────────────────────────────
+function confirmDelete(key, name) {
+  deleteTarget = key;
+  document.getElementById('confirm-slot').innerHTML = `
+    <div class="confirm-overlay" onclick="cancelDelete()">
+      <div class="confirm-box" onclick="event.stopPropagation()">
+        <h3>Delete file?</h3>
+        <p>${name}</p>
+        <p style="margin-top:6px;color:#f87171;font-size:12px">This cannot be undone. Note: tasks in the Scrum board that reference this file will show a broken link.</p>
+        <div class="confirm-btns" style="margin-top:16px">
+          <button class="btn btn-ghost" onclick="cancelDelete()">Cancel</button>
+          <button class="btn" style="background:#dc2626;color:#fff" onclick="doDelete()">Delete</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function cancelDelete() { deleteTarget = null; document.getElementById('confirm-slot').innerHTML = ''; }
+
+async function doDelete() {
+  const key = deleteTarget;
+  cancelDelete();
+  try {
+    await apiFetch('/drive', { method: 'DELETE', body: JSON.stringify({ key }) });
+    allFiles = allFiles.filter(f => f.key !== key);
+    renderGrid();
+  } catch {
+    alert('Delete failed — please try again.');
+  }
+}
+
+function doLogout() { clearToken(); renderLogin(); }
+
+// ── Keyboard shortcut ──────────────────────────────────────────────────────
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeViewer(); cancelDelete(); } });
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+renderApp();
+</script>
+</body>
+</html>
