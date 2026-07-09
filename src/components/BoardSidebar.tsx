@@ -70,6 +70,41 @@ export default function BoardSidebar({
           <button className="sidebar-close" onClick={onToggle} title="Close sidebar">✕</button>
         </div>
 
+        {adding ? (
+          <div className="sidebar-add-form">
+            <input
+              ref={addRef}
+              className="sidebar-edit-input"
+              value={newName}
+              placeholder="Board name…"
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); commitAdd(); }
+                if (e.key === 'Escape') setAdding(false);
+              }}
+            />
+            <div className="sidebar-colors">
+              {BOARD_COLORS.map(c => (
+                <button
+                  key={c}
+                  className={`sidebar-color-dot${newColor === c ? ' active' : ''}`}
+                  style={{ background: c }}
+                  onClick={() => setNewColor(c)}
+                  title={c}
+                />
+              ))}
+            </div>
+            <div className="sidebar-add-btns">
+              <button className="btn btn-sm btn-outline" onClick={() => setAdding(false)}>Cancel</button>
+              <button className="btn btn-sm btn-primary" onClick={commitAdd} disabled={!newName.trim()}>Create</button>
+            </div>
+          </div>
+        ) : (
+          <button className="sidebar-new-btn" onClick={() => setAdding(true)}>
+            + New Board
+          </button>
+        )}
+
         <ul className="sidebar-list">
           {boards.map(b => (
             <li key={b.id} className={`sidebar-item${b.id === selectedId ? ' active' : ''}`}>
@@ -108,40 +143,6 @@ export default function BoardSidebar({
           ))}
         </ul>
 
-        {adding ? (
-          <div className="sidebar-add-form">
-            <input
-              ref={addRef}
-              className="sidebar-edit-input"
-              value={newName}
-              placeholder="Board name…"
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') { e.preventDefault(); commitAdd(); }
-                if (e.key === 'Escape') setAdding(false);
-              }}
-            />
-            <div className="sidebar-colors">
-              {BOARD_COLORS.map(c => (
-                <button
-                  key={c}
-                  className={`sidebar-color-dot${newColor === c ? ' active' : ''}`}
-                  style={{ background: c }}
-                  onClick={() => setNewColor(c)}
-                  title={c}
-                />
-              ))}
-            </div>
-            <div className="sidebar-add-btns">
-              <button className="btn btn-sm btn-outline" onClick={() => setAdding(false)}>Cancel</button>
-              <button className="btn btn-sm btn-primary" onClick={commitAdd} disabled={!newName.trim()}>Create</button>
-            </div>
-          </div>
-        ) : (
-          <button className="sidebar-new-btn" onClick={() => setAdding(true)}>
-            + New Board
-          </button>
-        )}
       </aside>
     </>
   );
