@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TaskFile } from '../types';
+import { normalizeFileUrl } from '../api';
 
 interface Props {
   file: TaskFile;
@@ -34,10 +35,11 @@ function CsvTable({ text }: { text: string }) {
 export default function FileViewer({ file, onClose }: Props) {
   const [text, setText] = useState<string | null>(null);
   const [loading, setLoading] = useState(file.type !== 'pdf');
+  const fileUrl = normalizeFileUrl(file.url);
 
   useEffect(() => {
     if (file.type === 'txt' || file.type === 'csv') {
-      fetch(file.url)
+      fetch(fileUrl)
         .then(r => r.text())
         .then(t => { setText(t); setLoading(false); })
         .catch(() => { setText('Could not load file.'); setLoading(false); });
@@ -54,7 +56,7 @@ export default function FileViewer({ file, onClose }: Props) {
           <span className="fv-name">{file.name}</span>
           <a
             className="fv-download"
-            href={file.url}
+            href={fileUrl}
             download={file.name}
             onClick={e => e.stopPropagation()}
             title="Download"
@@ -67,7 +69,7 @@ export default function FileViewer({ file, onClose }: Props) {
         <div className="fv-body">
           {file.type === 'pdf' && (
             <iframe
-              src={file.url}
+              src={fileUrl}
               className="fv-pdf"
               title={file.name}
             />

@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "NODE_OPTIONS=--experimental-global-webcrypto tsc && NODE_OPTIONS=--experimental-global-webcrypto vite build",
     "preview": "vite preview",
-    "deploy:web": "BASE_URL=/ tsc && BASE_URL=/ node_modules/.bin/vite build && aws s3 sync dist/ s3://scrum-forwardforecasting-295936871972/ --delete --exclude 'uploads/*' --exclude 'drive/*' && aws cloudfront create-invalidation --distribution-id E1AQDWOGNRBTEY --paths \"/*\" && echo '✅ Scrum board deployed to https://scrum.forwardforecasting.eu/'"
+    "deploy:web": "BASE_URL=/ NODE_OPTIONS=--experimental-global-webcrypto tsc && BASE_URL=/ NODE_OPTIONS=--experimental-global-webcrypto node_modules/.bin/vite build && aws s3 sync dist/ s3://scrum-forwardforecasting-295936871972/ --delete --exclude 'uploads/*' --exclude 'drive/*' && aws cloudfront create-invalidation --distribution-id E1AQDWOGNRBTEY --paths \"/*\" && echo '✅ Kanban deployed to https://kanban.forwardforecasting.eu/'"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",
@@ -19,6 +19,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "typescript": "^5.4.5",
-    "vite": "^5.3.1"
+    "vite": "^5.3.1",
+    "vite-plugin-pwa": "^1.3.0"
   }
 }

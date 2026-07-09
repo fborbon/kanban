@@ -1031,3 +1031,57 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+/* ── PWA / Mobile ── */
+@media (max-width: 640px) {
+  .header { padding: 0 14px; height: 52px; }
+  .header-title { font-size: 15px; }
+  .header-actions .btn-ghost:not(:last-child) { display: none; }
+  .tab-bar { padding: 0 14px; }
+
+  .main { padding: 12px; gap: 14px; }
+
+  /* Stack board columns vertically on narrow screens */
+  .board {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-x: unset;
+  }
+  .column { min-height: unset; }
+
+  /* Backlog scrolls horizontally as before */
+  .backlog-cards { padding: 10px 12px; }
+  .backlog-card  { min-width: 180px; }
+
+  /* Modal fills screen */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal {
+    max-width: 100%;
+    border-radius: 16px 16px 0 0;
+    max-height: 95svh;
+  }
+
+  /* File viewer fills screen */
+  .fv-overlay { padding: 0; align-items: flex-end; }
+  .fv-modal {
+    width: 100%;
+    height: 96svh;
+    border-radius: 16px 16px 0 0;
+  }
+
+  /* Calendar: reduce cell height and font */
+  .cal-cell { min-height: 68px; padding: 3px; }
+  .cal-weekday { padding: 6px 2px; font-size: 10px; letter-spacing: 0; }
+  .cal-task-pill { font-size: 10px; padding: 2px 4px; }
+  .cal-nav { padding: 10px 14px; }
+
+  /* Lightbox fills screen */
+  .lightbox-img { max-width: 98vw; max-height: 82vh; }
+}
+
+/* Safe area insets for notched phones */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .header { padding-top: env(safe-area-inset-top, 0); }
+  .modal { padding-bottom: env(safe-area-inset-bottom, 0); }
+}

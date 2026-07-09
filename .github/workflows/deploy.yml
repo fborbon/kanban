@@ -1,0 +1,82 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          BASE_URL: /
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync dist/ s3://scrum-forwardforecasting-295936871972/ \
+            --delete \
+            --exclude 'uploads/*' \
+            --exclude 'drive/*'
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id E1AQDWOGNRBTEY \
+            --paths "/*"
+
+      - name: Verify live site
+        run: |
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Cache-Control: no-cache" \
+            https://kanban.forwardforecasting.eu/)
+          echo "HTTP status: $STATUS"
+          [ "$STATUS" = "200" ] || exit 1
+
+      - name: Sync demo to Landing repo
+        env:
+          LANDING_TOKEN: ${{ secrets.LANDING_TOKEN }}
+        run: |
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          git clone --depth 1 \
+            "https://x-access-token:${LANDING_TOKEN}@github.com/fborbon/forwardforecasting-landing.git" \
+            /tmp/landing
+
+          # Copy the static demo page
+          cp Landing/kanban/index.html /tmp/landing/kanban/index.html
+
+          cd /tmp/landing
+          git add kanban/index.html
+          if git diff --cached --quiet; then
+            echo "Demo unchanged — skipping commit"
+          else
+            git commit -m "kanban: sync demo from kanban@${{ github.sha }}"
+            git push
+          fi

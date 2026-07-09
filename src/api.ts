@@ -2,6 +2,22 @@ import { AppState, TaskFile, FileType } from './types';
 
 const BASE = '/api';
 const TOKEN_KEY = 'scrum-jwt';
+const CANONICAL_ORIGIN = 'https://kanban.forwardforecasting.eu';
+
+// Rewrite file URLs that still point to the old scrum domain or raw CloudFront.
+export function normalizeFileUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const OLD_ORIGINS = [
+      'scrum.forwardforecasting.eu',
+      'dj8fh2qub7vc.cloudfront.net',
+    ];
+    if (OLD_ORIGINS.includes(u.hostname)) {
+      return CANONICAL_ORIGIN + u.pathname + u.search + u.hash;
+    }
+  } catch { /* not a URL — return as-is */ }
+  return url;
+}
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
