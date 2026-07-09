@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Task, TaskLink, TaskFile, Category, ColumnId, Urgency } from '../types';
+import { Task, TaskLink, TaskFile, Category, ColumnId, Urgency, Board } from '../types';
 import { uploadImage, uploadFile } from '../api';
 
 const COLUMNS: { id: ColumnId; label: string }[] = [
@@ -18,15 +18,18 @@ const URGENCIES: { id: Urgency; label: string }[] = [
 interface Props {
   task?: Task;
   defaultColumn: ColumnId;
+  defaultBoardId: string;
+  boards: Board[];
   categories: Category[];
   onSave: (data: Omit<Task, 'id' | 'createdAt' | 'order'> & { id?: string }) => void;
   onClose: () => void;
 }
 
-export default function TaskModal({ task, defaultColumn, categories, onSave, onClose }: Props) {
+export default function TaskModal({ task, defaultColumn, defaultBoardId, boards, categories, onSave, onClose }: Props) {
   const [title, setTitle]           = useState(task?.title ?? '');
   const [description, setDescription] = useState(task?.description ?? '');
   const [categoryId, setCategoryId] = useState<string | null>(task?.categoryId ?? null);
+  const [boardId, setBoardId]       = useState(task?.boardId ?? defaultBoardId);
   const [urgency, setUrgency]       = useState<Urgency>(task?.urgency ?? 'this-week');
   const [column, setColumn]         = useState<ColumnId>(task?.column ?? defaultColumn);
   const [date, setDate]             = useState(task?.date ?? '');
@@ -66,7 +69,7 @@ export default function TaskModal({ task, defaultColumn, categories, onSave, onC
     e.preventDefault();
     if (!title.trim()) return;
     const cleanLinks = links.filter(l => l.url.trim());
-    onSave({ id: task?.id, title: title.trim(), description: description.trim(), categoryId, urgency, column, date: date || null, location: location.trim() || null, startAt: startAt || null, endAt: endAt || null, links: cleanLinks, images, files });
+    onSave({ id: task?.id, title: title.trim(), description: description.trim(), categoryId, boardId, urgency, column, date: date || null, location: location.trim() || null, startAt: startAt || null, endAt: endAt || null, links: cleanLinks, images, files });
   };
 
   return (
@@ -104,6 +107,13 @@ export default function TaskModal({ task, defaultColumn, categories, onSave, onC
             Column
             <select value={column} onChange={e => setColumn(e.target.value as ColumnId)}>
               {COLUMNS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          </label>
+
+          <label>
+            Board
+            <select value={boardId} onChange={e => setBoardId(e.target.value)}>
+              {boards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           </label>
 

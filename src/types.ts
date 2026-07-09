@@ -7,6 +7,12 @@ export interface Category {
   color: string;
 }
 
+export interface Board {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface TaskLink {
   url: string;
   label: string;
@@ -25,6 +31,7 @@ export interface Task {
   title: string;
   description: string;
   categoryId: string | null;
+  boardId: string;
   urgency: Urgency;
   column: ColumnId;
   order: number;
@@ -41,4 +48,5 @@ export interface Task {
 export interface AppState {
   tasks: Task[];
   categories: Category[];
+  boards: Board[];
 }
