@@ -4,7 +4,7 @@ const BASE = '/api';
 const TOKEN_KEY = 'scrum-jwt';
 const CANONICAL_ORIGIN = 'https://kanban.forwardforecasting.eu';
 
-// Rewrite file URLs that still point to the old scrum domain or raw CloudFront.
+// Rewrite file URLs from old domains or old /app/ path prefix to canonical form.
 export function normalizeFileUrl(url: string): string {
   try {
     const u = new URL(url);
@@ -12,9 +12,19 @@ export function normalizeFileUrl(url: string): string {
       'scrum.forwardforecasting.eu',
       'dj8fh2qub7vc.cloudfront.net',
     ];
+
+    // Normalise origin
+    let pathname = u.pathname;
     if (OLD_ORIGINS.includes(u.hostname)) {
-      return CANONICAL_ORIGIN + u.pathname + u.search + u.hash;
+      // fall through — origin rewritten below
+    } else if (u.hostname !== 'kanban.forwardforecasting.eu') {
+      return url; // unrelated domain — leave untouched
     }
+
+    // Strip legacy /app prefix (app used to be served at /app/)
+    if (pathname.startsWith('/app/')) pathname = pathname.slice(4);
+
+    return CANONICAL_ORIGIN + pathname + u.search + u.hash;
   } catch { /* not a URL — return as-is */ }
   return url;
 }
