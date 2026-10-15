@@ -29,7 +29,7 @@ A personal Kanban board built for single-user private use, accessible from any d
 - **Backlog** — staging area with one-click promotion to any column
 - **Rich card metadata** — links, images (compressed client-side), PDF/TXT/CSV attachments with inline viewer, location map link, start/end datetimes
 - **Calendar view** — month grid showing tasks by completion date
-- **JWT auth** — private service, single user, 30-day token
+- **Central login** - private service behind the shared portal for all private services (password + Google Authenticator); the app has no login of its own
 - **Cross-device sync** — DynamoDB as single source of truth, debounced push on every state change
 - **File drive** — all uploads browsable at `drive.forwardforecasting.eu`
 
@@ -40,36 +40,35 @@ A personal Kanban board built for single-user private use, accessible from any d
 ```mermaid
 flowchart TD
     Browser["🖥️ Browser\n(React 18 + Vite)"]
-    CF["☁️ CloudFront CDN\nkanban.forwardforecasting.eu"]
-    S3_App["🗂️ S3 Bucket\nApp assets\n/index.html, /assets/*"]
-    S3_Up["🗂️ S3 Bucket\nUploads\n/uploads/images/*\n/uploads/files/*"]
+    Nginx["🔒 nginx on EC2\nkanban.forwardforecasting.eu"]
+    Authelia["🔑 Authelia\ncentral login + TOTP"]
+    Static["📁 /var/www/kanban\nindex.html, /assets/*"]
     APIGW["🔀 API Gateway\nHTTP API"]
-    Lambda["⚡ Lambda\nNode.js 18\nscrum-canva-api"]
-    DynamoDB["🛢️ DynamoDB\nscrum-canva-state\n(PITR enabled)"]
+    Lambda["⚡ Lambda\nNode.js 22\nkanban-api"]
+    DynamoDB["🛢️ DynamoDB\nkanban-state\n(PITR enabled)"]
+    S3_Up["🗂️ S3 bucket (private)\nuploads/images/*\nuploads/files/*"]
 
-    Browser -->|"HTTPS GET /\n(HTML + JS + CSS)"| CF
-    CF -->|"Cache hit"| S3_App
-    Browser -->|"POST /api/login"| CF
-    Browser -->|"GET/PUT /api/state"| CF
-    Browser -->|"POST /api/upload\n(base64 file)"| CF
-    CF -->|"/api/* → forward"| APIGW
+    Browser -->|"every request"| Nginx
+    Nginx -->|"auth_request: session valid?"| Authelia
+    Nginx -->|"GET / and assets"| Static
+    Nginx -->|"/api/* and /uploads/*\n+ X-Origin-Secret header"| APIGW
     APIGW --> Lambda
     Lambda -->|"Get/Put item"| DynamoDB
-    Lambda -->|"PutObject\n(images, files)"| S3_Up
-    Lambda -->|"Returns CloudFront URL"| Browser
-    S3_Up -->|"Served via CDN"| CF
-    CF -->|"Uploads & assets\nserved to browser"| Browser
+    Lambda -->|"PutObject / GetObject"| S3_Up
+    Lambda -->|"JSON, or the file bytes"| Browser
 ```
 
 ### Processing steps
 
 | Step | Where | What happens |
 |---|---|---|
-| Login | Lambda | Credentials compared to env vars; custom HS256 JWT signed and returned |
+| Login | nginx + Authelia | Every path (app, API, attachments) requires the central session; logged out, nginx redirects to `https://forwardforecasting.eu/auth/` |
+| Trust check | Lambda | Only requests carrying the `X-Origin-Secret` that nginx adds are served (constant-time compare, refused if the secret is unset); direct API Gateway calls get 401 |
 | State load | Lambda → DynamoDB | Full `AppState` JSON fetched; client merges with localStorage (most tasks wins) |
-| Image upload | Browser → Lambda → S3 | Canvas API resizes to max 1200 px, JPEG 0.82; base64 POSTed; Lambda writes to S3 and returns CloudFront URL |
+| Image upload | Browser → Lambda → S3 | Canvas API resizes to max 1200 px, JPEG 0.82; base64 POSTed; Lambda writes to the private bucket and returns a `kanban.forwardforecasting.eu/uploads/...` URL |
 | File upload | Browser → Lambda → S3 | FileReader base64; Lambda writes PDF/TXT/CSV to `uploads/files/`; returns URL |
-| State push | Lambda → DynamoDB | Entire `AppState` JSON stored under `userId` key; debounced 1.5 s after every change |
+| Attachment view | nginx → Lambda → S3 | `/uploads/<key>` is rewritten to `/api/file?key=...`; the Lambda streams the object (the bucket is never public) |
+| State push | Lambda → DynamoDB | Entire `AppState` JSON stored under the board's key; debounced 1.5 s after every change |
 | Drag-and-drop | Browser only | `@hello-pangea/dnd` reorders in-memory state; triggers debounced sync |
 
 ---
@@ -93,8 +92,8 @@ flowchart TD
 |---|---|
 | **@aws-sdk/client-dynamodb** | Read/write app state |
 | **@aws-sdk/util-dynamodb** | `marshall` / `unmarshall` helpers |
-| **@aws-sdk/client-s3** | Store and list uploaded files |
-| **Node.js `crypto`** | Custom HS256 JWT signing — no third-party JWT library needed |
+| **@aws-sdk/client-s3** | Store, list and stream uploaded files |
+| **Node.js `crypto`** | `timingSafeEqual` for the shared-secret check |
 
 ---
 
@@ -104,17 +103,15 @@ flowchart TD
 kanban.forwardforecasting.eu
         │
         ▼
-  CloudFront (E1AQDWOGNRBTEY)
-  ┌──────────────────────────────────┐
-  │  /api/*  ──► API Gateway HTTP    │
-  │              └─► Lambda          │
-  │                  ├─► DynamoDB    │
-  │                  └─► S3          │
-  │  /*      ──► S3 (OAC)           │
-  │              ├── /index.html     │
-  │              ├── /assets/        │
-  │              └── /uploads/       │
-  └──────────────────────────────────┘
+  EC2 nginx (shared host) ── auth_request ──► Authelia (central login + TOTP)
+  ┌──────────────────────────────────────────┐
+  │  /         ──► /var/www/kanban (static)  │
+  │  /api/*    ──► API Gateway ─► Lambda     │
+  │  /uploads/*──► /api/file ─► Lambda       │
+  │               (adds X-Origin-Secret)     │
+  │                 ├─► DynamoDB             │
+  │                 └─► S3 (private)         │
+  └──────────────────────────────────────────┘
 
 drive.forwardforecasting.eu
         │
@@ -125,11 +122,11 @@ drive.forwardforecasting.eu
 
 **Key design decisions:**
 
-- **No server** — Lambda handles all API; static assets served directly from S3 via CloudFront OAC (no public bucket).
-- **Single DynamoDB item per user** — entire board state stored as one JSON blob; simple, cheap, avoids query complexity.
-- **Client-side image compression** — reduces upload size by ~60–80% before the base64 round-trip through API Gateway (which has a 10 MB body limit).
-- **Custom JWT** — Node.js `crypto` only; avoids bundling `jsonwebtoken` or similar in the Lambda package.
-- **Merge strategy** — on login, whichever side (local vs remote) has more tasks wins; prevents accidental overwrites from a fresh browser session.
+- **One front door** - since 2026-10-15 the static app is served by nginx on the shared EC2 host behind the central login, like every private service. The previous S3 + CloudFront hosting (distribution `E1AQDWOGNRBTEY`, now disabled) made attachments downloadable by anyone with the link, and the app's own login had no lockout and 30-day tokens.
+- **Serverless API kept** - Lambda + API Gateway + DynamoDB stay; nginx forwards `/api/` with a shared secret header so the API is only usable through the login.
+- **Single DynamoDB item** - the whole board state is one JSON blob; simple, cheap, no query complexity.
+- **Client-side image compression** - reduces upload size by ~60-80% before the base64 round-trip through API Gateway (10 MB body limit).
+- **Merge strategy** - on load, whichever side (local vs remote) has more tasks wins; prevents accidental overwrites from a fresh browser session.
 
 ---
 
@@ -141,21 +138,22 @@ Usage assumptions: 1 user, ~2 sessions/day, ~200 API calls/day, ~500 MB uploads 
 
 | Service | Resource | Est. cost |
 |---|---|---|
-| **CloudFront** | ~2 GB transfer out + 200 K requests | $0.18 |
+| **EC2 (shared host)** | static files served by the existing nginx; no extra instance | $0.00 *(marginal)* |
 | **S3** | ~500 MB storage + 10 K requests | $0.02 |
-| **Lambda** | ~6 K invocations × 200 ms × 256 MB | $0.00 *(free tier)* |
+| **Lambda** | ~6 K invocations × 200 ms × 256 MB (attachments now stream through it) | $0.00 *(free tier)* |
 | **API Gateway** | ~6 K HTTP requests | $0.01 |
 | **DynamoDB** | ~6 K RCU/WCU on-demand + PITR ~0.01 GB | $0.20 |
-| **ACM** | TLS cert | $0.00 |
-| **Total** | | **≈ $0.41 / month** |
+| **Route 53** | one A record in the existing zone | $0.00 |
+| **TLS** | Let's Encrypt on the host | $0.00 |
+| **Total** | | **≈ $0.23 / month** |
 
 ### Yearly
 
 | | |
 |---|---|
-| **Estimated annual cost** | **≈ $5.00 / year** |
+| **Estimated annual cost** | **≈ $2.80 / year** |
 
-> Costs scale with upload volume. 10 GB of uploads would add ~$0.23/month in S3 storage and ~$0.85/month in CloudFront transfer. All other costs remain negligible at personal-use scale.
+> Costs scale with upload volume: 10 GB of uploads adds ~$0.23/month in S3 storage. Data transfer now leaves through the EC2 host (first 100 GB/month free across the account). Moving off CloudFront saved ~$0.18/month. RAM on the shared host: none extra (static files only).
 
 ---
 
