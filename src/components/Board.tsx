@@ -9,11 +9,12 @@ interface Props {
   onEditTask: (task: Task) => void;
   onDeleteTask: (id: string) => void;
   onAddTask: (col: ColumnId) => void;
+  layout?: 'stack' | 'cols';
 }
 
-export default function Board({ tasks, categories, onEditTask, onDeleteTask, onAddTask }: Props) {
+export default function Board({ tasks, categories, onEditTask, onDeleteTask, onAddTask, layout }: Props) {
   return (
-    <div className="board">
+    <div className={`board${layout === 'cols' ? ' board--cols' : ''}`}>
       {COLUMNS.map(col => (
         <Column
           key={col}

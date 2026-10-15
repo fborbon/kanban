@@ -30,34 +30,40 @@ jobs:
           BASE_URL: /
         run: npm run build
 
+      # The app is served from the EC2 host at kanban.forwardforecasting.eu, behind the central login
+      # (Authelia). The old S3 + CloudFront hosting was retired 2026-10-15 (attachments were public).
+      - name: Deploy frontend to EC2
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key" dist/ ubuntu@${{ secrets.EC2_HOST }}:/var/www/kanban/
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: eu-west-1
 
-      - name: Deploy to S3
+      # Lambda env (ORIGIN_SECRET, SCRUM_USER) is managed outside the repo; only the code is deployed.
+      - name: Deploy API (Lambda kanban-api)
         run: |
-          aws s3 sync dist/ s3://scrum-forwardforecasting-295936871972/ \
-            --delete \
-            --exclude 'uploads/*' \
-            --exclude 'drive/*'
-
-      - name: Invalidate CloudFront
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id E1AQDWOGNRBTEY \
-            --paths "/*"
+          cd server && npm ci --omit=dev && zip -qr ../lambda.zip . && cd ..
+          aws lambda update-function-code --function-name kanban-api --zip-file fileb://lambda.zip >/dev/null
+          aws lambda wait function-updated-v2 --function-name kanban-api
 
       - name: Verify live site
         run: |
-          sleep 10
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Cache-Control: no-cache" \
-            https://kanban.forwardforecasting.eu/)
-          echo "HTTP status: $STATUS"
-          [ "$STATUS" = "200" ] || exit 1
+          sleep 5
+          # Logged out, every path must redirect to the central login portal
+          STATUS=$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" https://kanban.forwardforecasting.eu/)
+          echo "$STATUS"
+          echo "$STATUS" | grep -q "^302 https://forwardforecasting.eu/auth/" || exit 1
+          # The API must refuse anything that does not come through nginx
+          API=$(curl -s -o /dev/null -w "%{http_code}" https://jz9kfi5pui.execute-api.eu-west-1.amazonaws.com/state)
+          echo "direct API: $API"; [ "$API" = "401" ] || exit 1
 
       - name: Sync demo to Landing repo
         env:

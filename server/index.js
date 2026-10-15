@@ -1,12 +1,12 @@
 const { DynamoDBClient, GetItemCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
-const { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } = require('@aws-sdk/client-s3');
-const { createHmac, timingSafeEqual, randomUUID } = require('crypto');
+const { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { timingSafeEqual, randomUUID } = require('crypto');
 
-const dynamo = new DynamoDBClient({ region: 'us-east-1' });
-const s3     = new S3Client({ region: 'us-east-1' });
-const TABLE  = 'scrum-canva-state';
-const BUCKET = 'scrum-forwardforecasting-295936871972';
+const dynamo = new DynamoDBClient({ region: 'eu-west-1' });
+const s3     = new S3Client({ region: 'eu-west-1' });
+const TABLE  = 'kanban-state';
+const BUCKET = 'kanban-forwardforecasting-295936871972';
 const CF_URL      = 'https://kanban.forwardforecasting.eu';
 const DRIVE_CF_URL = 'https://drive.forwardforecasting.eu';
 const UPLOADS_PREFIX = 'uploads/';
@@ -16,39 +16,17 @@ const EXT_TYPE = {
   jpg: 'image', jpeg: 'image', png: 'image', webp: 'image', gif: 'image',
 };
 
-const JWT_SECRET = process.env.JWT_SECRET;
-const SCRUM_USER = process.env.SCRUM_USER;
-const SCRUM_PASS = process.env.SCRUM_PASS;
+// Auth: the app is served only through nginx on the EC2 host, behind the central login
+// (Authelia, password + Google Authenticator). nginx adds X-Origin-Secret to every request it
+// forwards here; anything without it (direct API Gateway / old CloudFront calls) is refused.
+const ORIGIN_SECRET = process.env.ORIGIN_SECRET ?? '';
+const SCRUM_USER    = process.env.SCRUM_USER;   // DynamoDB key of the single board
 
-// ── Minimal JWT (no deps) ──────────────────────────────────────────────────
-function b64url(str) {
-  return Buffer.from(str).toString('base64url');
-}
-
-function signJwt(payload) {
-  const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const body   = b64url(JSON.stringify({
-    ...payload,
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 86400 * 30, // 30 days
-  }));
-  const sig = createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
-  return `${header}.${body}.${sig}`;
-}
-
-function verifyJwt(token) {
-  try {
-    const [header, body, sig] = token.split('.');
-    const expected = createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
-    const sBuf = Buffer.from(sig,      'base64url');
-    const eBuf = Buffer.from(expected, 'base64url');
-    if (sBuf.length !== eBuf.length || !timingSafeEqual(sBuf, eBuf)) return null;
-    const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
-    if (payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload;
-  } catch {
-    return null;
-  }
+function fromTrustedProxy(event) {
+  const got = event.headers?.['x-origin-secret'] ?? event.headers?.['X-Origin-Secret'] ?? '';
+  if (!ORIGIN_SECRET || !got) return false;                        // fail closed if unset
+  const a = Buffer.from(got), b = Buffer.from(ORIGIN_SECRET);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -71,21 +49,28 @@ exports.handler = async (event) => {
   const method = (event.requestContext?.http?.method ?? event.httpMethod ?? 'GET').toUpperCase();
   const path   = getPath(event);
 
-  // ── POST /login ──────────────────────────────────────────────────────────
-  if (method === 'POST' && path === '/login') {
-    let body;
-    try { body = JSON.parse(event.body ?? '{}'); } catch { body = {}; }
+  // ── Auth guard (central login happens in nginx) ───────────────────────
+  if (!fromTrustedProxy(event)) return resp(401, { error: 'Unauthorized' });
+  if (path === '/login') return resp(410, { error: 'Login moved to the central portal' });
+  const payload = { sub: SCRUM_USER };
 
-    if (body.username !== SCRUM_USER || body.password !== SCRUM_PASS) {
-      return resp(401, { error: 'Invalid credentials' });
+  // ── GET /file?key=uploads/... : attachments, served only behind the login ─
+  if (method === 'GET' && path === '/file') {
+    const key = event.queryStringParameters?.key ?? '';
+    if (!key.startsWith(UPLOADS_PREFIX) || key.includes('..')) return resp(400, { error: 'Invalid key' });
+    try {
+      const obj = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
+      const body = Buffer.from(await obj.Body.transformToByteArray());
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': obj.ContentType ?? 'application/octet-stream', 'Cache-Control': 'private, max-age=300' },
+        body: body.toString('base64'),
+        isBase64Encoded: true,
+      };
+    } catch {
+      return resp(404, { error: 'Not found' });
     }
-    return resp(200, { token: signJwt({ sub: SCRUM_USER }) });
   }
-
-  // ── Auth guard ───────────────────────────────────────────────────────────
-  const auth    = event.headers?.authorization ?? event.headers?.Authorization ?? '';
-  const payload = verifyJwt(auth.replace(/^Bearer\s+/, ''));
-  if (!payload) return resp(401, { error: 'Unauthorized' });
 
   // ── GET /state ───────────────────────────────────────────────────────────
   if (method === 'GET' && path === '/state') {

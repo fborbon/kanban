@@ -2,13 +2,12 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { AppState, Task, Category, ColumnId, Board } from './types';
 import { loadState, saveState, migrateState, GENERAL_BOARD_ID, GENERAL_BOARD } from './store';
-import { getToken, clearToken, fetchState, pushState } from './api';
+import { fetchState, pushState, goToLogin, logout } from './api';
 import KanbanBoard from './components/Board';
 import Backlog from './components/Backlog';
 import CalendarView from './components/CalendarView';
 import TaskModal from './components/TaskModal';
 import CategoryModal from './components/CategoryModal';
-import LoginScreen from './components/LoginScreen';
 import BoardSidebar from './components/BoardSidebar';
 
 type SyncStatus = 'idle' | 'syncing' | 'error';
@@ -19,7 +18,7 @@ function todayStr() {
 }
 
 function App() {
-  const [authed, setAuthed]           = useState(() => !!getToken());
+  const authed = true;   // the central login (nginx + Authelia) already authenticated this page
   const [state, setState]             = useState<AppState>(loadState);
   const [syncStatus, setSyncStatus]   = useState<SyncStatus>('idle');
   const [tab, setTab]                 = useState<Tab>('board');
@@ -30,6 +29,9 @@ function App() {
   );
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window !== 'undefined' && window.innerWidth >= 641
+  );
+  const [boardLayout, setBoardLayout] = useState<'stack' | 'cols'>(
+    () => (localStorage.getItem('kanban-layout') as 'stack' | 'cols') ?? 'stack'
   );
   const syncTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstLoad  = useRef(true);
@@ -65,7 +67,7 @@ function App() {
         setSyncStatus('idle');
       })
       .catch(err => {
-        if ((err as Error).message === 'UNAUTHORIZED') setAuthed(false);
+        if ((err as Error).message === 'UNAUTHORIZED') goToLogin();
         setSyncStatus('error');
       });
   }, [authed]);
@@ -81,7 +83,7 @@ function App() {
       pushState(state)
         .then(() => setSyncStatus('idle'))
         .catch(err => {
-          if ((err as Error).message === 'UNAUTHORIZED') setAuthed(false);
+          if ((err as Error).message === 'UNAUTHORIZED') goToLogin();
           setSyncStatus('error');
         });
     }, 1500);
@@ -210,10 +212,9 @@ function App() {
   };
 
   // ───────────────────────────────────────────────────────────────────────────
-  const handleLogout = () => { clearToken(); setAuthed(false); };
+  const handleLogout = logout;
   const SYNC_ICON: Record<SyncStatus, string> = { idle: '☁️', syncing: '🔄', error: '⚠️' };
 
-  if (!authed) return <LoginScreen onLogin={() => { isFirstLoad.current = true; setAuthed(true); }} />;
 
   const boardTasks = state.tasks.filter(t => t.boardId === effectiveBoardId);
 
@@ -246,6 +247,19 @@ function App() {
           <button className={`tab-btn${tab === 'calendar' ? ' active' : ''}`} onClick={() => setTab('calendar')}>
             📅 Calendar
           </button>
+          {tab === 'board' && (
+            <button
+              className="layout-toggle-btn"
+              onClick={() => setBoardLayout(l => {
+                const next = l === 'stack' ? 'cols' : 'stack';
+                localStorage.setItem('kanban-layout', next);
+                return next;
+              })}
+              title={boardLayout === 'stack' ? 'Switch to columns view' : 'Switch to stack view'}
+            >
+              {boardLayout === 'stack' ? '⊞' : '☰'}
+            </button>
+          )}
         </nav>
 
         <div className="app-body">
@@ -270,6 +284,7 @@ function App() {
                   onEditTask={openEditTask}
                   onDeleteTask={deleteTask}
                   onAddTask={openCreateTask}
+                  layout={boardLayout}
                 />
                 <Backlog
                   tasks={boardTasks.filter(t => t.column === 'backlog')}

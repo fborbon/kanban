@@ -63,17 +63,41 @@ function PdfViewer({ url }: { url: string }) {
           const availW = (wrapRef.current?.clientWidth ?? 840) - 32;
           const scale  = Math.min(availW / baseVp.width, 2.5);
           const vp     = page.getViewport({ scale });
+          const dpr    = window.devicePixelRatio || 1;
+
+          const pageWrap = document.createElement('div');
+          pageWrap.style.cssText =
+            `position:relative;width:${vp.width}px;height:${vp.height}px;` +
+            'max-width:100%;flex-shrink:0;';
 
           const canvas   = document.createElement('canvas');
-          canvas.width   = vp.width;
-          canvas.height  = vp.height;
+          canvas.width   = Math.floor(vp.width * dpr);
+          canvas.height  = Math.floor(vp.height * dpr);
           canvas.style.cssText =
-            'max-width:100%;display:block;border-radius:4px;' +
-            'box-shadow:0 2px 12px rgba(0,0,0,.5);flex-shrink:0;';
+            `width:${vp.width}px;height:${vp.height}px;` +
+            'display:block;border-radius:4px;' +
+            'box-shadow:0 2px 12px rgba(0,0,0,.5);';
 
-          canvasWrap.current.appendChild(canvas);
+          const textLayerDiv = document.createElement('div');
+          textLayerDiv.className = 'textLayer';
+          textLayerDiv.style.setProperty('--scale-factor', String(scale));
+          textLayerDiv.style.width  = `${vp.width}px`;
+          textLayerDiv.style.height = `${vp.height}px`;
+
+          pageWrap.appendChild(canvas);
+          pageWrap.appendChild(textLayerDiv);
+          canvasWrap.current.appendChild(pageWrap);
+
           await page.render({
             canvasContext: canvas.getContext('2d')!,
+            viewport: vp,
+            transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
+          }).promise;
+
+          const textContent = await page.getTextContent();
+          await lib.renderTextLayer({
+            textContentSource: textContent,
+            container: textLayerDiv,
             viewport: vp,
           }).promise;
         }

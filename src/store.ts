@@ -1,6 +1,6 @@
 import { AppState, Board } from './types';
 
-const KEY = 'scrum-canva-v1';
+const KEY = 'kanban-v1';
 
 const OLD_DEFAULT_IDS = ['cat-feature', 'cat-bug', 'cat-tech', 'cat-research', 'cat-design'];
 

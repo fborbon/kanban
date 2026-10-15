@@ -1,7 +1,6 @@
 import { AppState, TaskFile, FileType } from './types';
 
 const BASE = '/api';
-const TOKEN_KEY = 'scrum-jwt';
 const CANONICAL_ORIGIN = 'https://kanban.forwardforecasting.eu';
 
 // Rewrite file URLs from old domains or old /app/ path prefix to canonical form.
@@ -29,31 +28,27 @@ export function normalizeFileUrl(url: string): string {
   return url;
 }
 
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+// Auth is handled by the central login (Authelia) in front of this app: the browser's session
+// cookie travels with every same-origin request. An expired session makes nginx answer with a
+// redirect to the login portal; `redirect: 'manual'` turns that into an opaque response, which
+// we report as UNAUTHORIZED so the app can reload into the portal.
+async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const res = await fetch(`${BASE}${path}`, { ...init, credentials: 'same-origin', redirect: 'manual' });
+  if (res.type === 'opaqueredirect' || res.status === 401) throw new Error('UNAUTHORIZED');
+  return res;
 }
 
-export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
+export function goToLogin(): void {
+  // Go to the portal explicitly: a plain reload could be answered by the PWA service worker's cache.
+  window.location.href = 'https://forwardforecasting.eu/auth/?rd=' + encodeURIComponent(window.location.href);
 }
 
-export async function login(username: string, password: string): Promise<void> {
-  const res = await fetch(`${BASE}/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  });
-  if (!res.ok) throw new Error('Invalid credentials');
-  const { token } = await res.json() as { token: string };
-  localStorage.setItem(TOKEN_KEY, token);
+export function logout(): void {
+  window.location.href = 'https://forwardforecasting.eu/auth/logout';
 }
 
 export async function fetchState(): Promise<AppState> {
-  const token = getToken();
-  const res = await fetch(`${BASE}/state`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (res.status === 401) { clearToken(); throw new Error('UNAUTHORIZED'); }
+  const res = await apiFetch('/state');
   if (!res.ok) throw new Error('Failed to load state');
   return res.json() as Promise<AppState>;
 }
@@ -80,13 +75,11 @@ async function compressImage(file: File): Promise<{ data: string; mimeType: stri
 
 export async function uploadImage(file: File): Promise<string> {
   const compressed = await compressImage(file);
-  const token = getToken();
-  const res = await fetch(`${BASE}/upload`, {
+  const res = await apiFetch('/upload', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(compressed),
   });
-  if (res.status === 401) { clearToken(); throw new Error('UNAUTHORIZED'); }
   if (!res.ok) throw new Error('Upload failed');
   const { url } = await res.json() as { url: string };
   return url;
@@ -112,27 +105,20 @@ export async function uploadFile(file: File): Promise<TaskFile> {
   const type = detectFileType(file);
   const mimeMap: Record<FileType, string> = { pdf: 'application/pdf', txt: 'text/plain', csv: 'text/csv' };
   const data = await readAsBase64(file);
-  const token = getToken();
-  const res = await fetch(`${BASE}/upload`, {
+  const res = await apiFetch('/upload', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ data, mimeType: mimeMap[type], filename: file.name }),
   });
-  if (res.status === 401) { clearToken(); throw new Error('UNAUTHORIZED'); }
   if (!res.ok) throw new Error('Upload failed');
   const { url } = await res.json() as { url: string };
   return { url, name: file.name, type };
 }
 
 export async function pushState(state: AppState): Promise<void> {
-  const token = getToken();
-  const res = await fetch(`${BASE}/state`, {
+  await apiFetch('/state', {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(state),
   });
-  if (res.status === 401) { clearToken(); throw new Error('UNAUTHORIZED'); }
 }

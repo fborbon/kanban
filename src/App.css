@@ -805,6 +805,32 @@ body {
   width: 100%;
   box-sizing: border-box;
 }
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-align: initial;
+  opacity: 1;
+}
+.textLayer span,
+.textLayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+.textLayer ::selection { background: rgba(108, 99, 255, 0.4); }
+.textLayer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: -1;
+  cursor: default;
+  user-select: none;
+}
+.textLayer .endOfContent.active { top: 0; }
 .fv-text {
   flex: 1;
   overflow: auto;
@@ -1292,6 +1318,9 @@ body {
 ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #aaa; }
 
+/* Layout toggle — mobile only */
+.layout-toggle-btn { display: none; }
+
 /* ── PWA / Mobile ── */
 @media (max-width: 640px) {
   .header { padding: 0 14px; height: 52px; }
@@ -1309,7 +1338,37 @@ body {
     gap: 12px;
     overflow-x: unset;
   }
+
+  /* Side-by-side columns with horizontal scroll */
+  .board--cols {
+    display: grid;
+    grid-template-columns: repeat(3, 260px);
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
   .column { min-height: unset; }
+
+  /* Layout toggle button */
+  .layout-toggle-btn {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: rgba(255,255,255,0.85);
+    font-size: 16px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    line-height: 1;
+    font-family: inherit;
+    transition: background 0.1s;
+    flex-shrink: 0;
+    align-self: center;
+  }
+  .layout-toggle-btn:hover { background: rgba(255,255,255,0.2); }
 
   /* Backlog scrolls horizontally as before */
   .backlog-cards { padding: 10px 12px; }

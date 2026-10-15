@@ -442,7 +442,7 @@ function renderGrid() {
     document.getElementById('grid').innerHTML = `
       <div class="empty">
         <div class="empty-icon">${search || filter !== 'all' ? '🔍' : '📭'}</div>
-        <p>${search || filter !== 'all' ? 'No files match your filter.' : 'No uploads yet. Attach files from your Scrum board tasks.'}</p>
+        <p>${search || filter !== 'all' ? 'No files match your filter.' : 'No uploads yet. Attach files from your Kanban board tasks.'}</p>
       </div>`;
     return;
   }
@@ -534,7 +534,7 @@ function confirmDelete(key, name) {
       <div class="confirm-box" onclick="event.stopPropagation()">
         <h3>Delete file?</h3>
         <p>${name}</p>
-        <p style="margin-top:6px;color:#f87171;font-size:12px">This cannot be undone. Note: tasks in the Scrum board that reference this file will show a broken link.</p>
+        <p style="margin-top:6px;color:#f87171;font-size:12px">This cannot be undone. Note: tasks in the Kanban board that reference this file will show a broken link.</p>
         <div class="confirm-btns" style="margin-top:16px">
           <button class="btn btn-ghost" onclick="cancelDelete()">Cancel</button>
           <button class="btn" style="background:#dc2626;color:#fff" onclick="doDelete()">Delete</button>
